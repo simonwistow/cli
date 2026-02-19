@@ -12,6 +12,14 @@ import (
 	"github.com/fastly/cli/pkg/manifest"
 )
 
+// SSOAuthenticator defines the interface for SSO authentication operations.
+// This allows the authentication logic to be decoupled from the command list,
+// enabling reuse in plugins via the framework package.
+type SSOAuthenticator interface {
+	Authenticate(in io.Reader, out io.Writer) error
+	SetForceReAuth(force bool)
+}
+
 // DefaultAPIEndpoint is the default Fastly API endpoint.
 const DefaultAPIEndpoint = "https://api.fastly.com"
 
@@ -84,6 +92,9 @@ type Data struct {
 	// interactive prompt can be skipped. This is for scenarios where the command
 	// is executed directly by the user.
 	SkipAuthPrompt bool
+	// SSOAuth provides SSO authentication via the SSOAuthenticator interface.
+	// Used by the framework package to support plugin-based authentication.
+	SSOAuth SSOAuthenticator
 	// SSORunner runs the SSO authentication flow. It is set by commands.Define()
 	// so that app/run.go can invoke SSO without a registered command.
 	SSORunner func(in io.Reader, out io.Writer, forceReAuth bool, skipPrompt bool) error

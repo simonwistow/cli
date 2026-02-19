@@ -31,6 +31,7 @@ import (
 	"github.com/fastly/cli/pkg/config"
 	"github.com/fastly/cli/pkg/env"
 	fsterr "github.com/fastly/cli/pkg/errors"
+	"github.com/fastly/cli/pkg/framework"
 	"github.com/fastly/cli/pkg/github"
 	"github.com/fastly/cli/pkg/global"
 	"github.com/fastly/cli/pkg/lookup"
@@ -196,7 +197,7 @@ var Init = func(args []string, stdin io.Reader) (*global.Data, error) {
 func Exec(data *global.Data) error {
 	app := configureKingpin(data)
 	cmds := commands.Define(app, data)
-	command, commandName, err := processCommandInput(data, app, cmds)
+	command, commandName, err := processCommandInput(data, app, cmds, fastlyCLIOptions().ExternalLookup)
 	if err != nil {
 		return err
 	}
@@ -220,6 +221,9 @@ func Exec(data *global.Data) error {
 	case "help--formatjson":
 		fallthrough
 	case "shell-autocomplete":
+		return nil
+	case "external":
+		// External commands already executed inside processCommandInput.
 		return nil
 	}
 
@@ -853,4 +857,45 @@ func commandSuppressesVerbose(command argparser.Command) bool {
 	}
 
 	return false
+}
+
+// fastlyCLIOptions returns the Options that wire together the full Fastly CLI.
+// This can be used to build plugins or tools that embed the same CLI behaviour.
+func fastlyCLIOptions() framework.Options {
+	return framework.Options{
+		AppName:        "fastly",
+		AppHelp:        "A tool to interact with the Fastly API",
+		DefineCommands: commands.Define,
+		ConfigureVersioners: func(c api.HTTPClient, debugMode bool, md manifest.Data) global.Versioners {
+			return global.Versioners{
+				CLI: github.New(github.Opts{
+					DebugMode:  debugMode,
+					HTTPClient: c,
+					Org:        "fastly",
+					Repo:       "cli",
+					Binary:     "fastly",
+				}),
+				Viceroy: github.New(github.Opts{
+					DebugMode:  debugMode,
+					HTTPClient: c,
+					Org:        "fastly",
+					Repo:       "viceroy",
+					Binary:     "viceroy",
+					Version:    md.File.LocalServer.ViceroyVersion,
+				}),
+				WasmTools: github.New(github.Opts{
+					DebugMode:  debugMode,
+					HTTPClient: c,
+					Org:        "bytecodealliance",
+					Repo:       "wasm-tools",
+					Binary:     "wasm-tools",
+					External:   true,
+					Nested:     true,
+				}),
+			}
+		},
+		ExecuteWasmTools: compute.ExecuteWasmTools,
+		CheckForUpdates:  true,
+		ExternalLookup:   &framework.ExternalCommandLookup{Prefix: "fastly"},
+	}
 }

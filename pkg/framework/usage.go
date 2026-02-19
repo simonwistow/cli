@@ -1,4 +1,4 @@
-package app
+package framework
 
 import (
 	"bytes"
@@ -14,18 +14,13 @@ import (
 	"github.com/fastly/kingpin"
 
 	"github.com/fastly/cli/pkg/argparser"
-	"github.com/fastly/cli/pkg/env"
 	fsterr "github.com/fastly/cli/pkg/errors"
-	"github.com/fastly/cli/pkg/framework"
 	"github.com/fastly/cli/pkg/global"
 	"github.com/fastly/cli/pkg/text"
 )
 
-// Usage returns a contextual usage string for the application. In order to deal
-// with Kingpin's annoying love of side effects, we have to swap the app.Writers
-// to capture output; the out and err parameters, therefore, are the io.Writers
-// re-assigned to the app via app.Writers after calling Usage.
-func Usage(args []string, app *kingpin.Application, out, err io.Writer, vars map[string]any) string {
+// Usage returns a contextual usage string for the application.
+func Usage(args []string, app *kingpin.Application, out, errW io.Writer, vars map[string]any) string {
 	var buf bytes.Buffer
 	app.Writers(&buf, io.Discard)
 	app.UsageContext(&kingpin.UsageContext{
@@ -34,34 +29,11 @@ func Usage(args []string, app *kingpin.Application, out, err io.Writer, vars map
 		Vars:     vars,
 	})
 	app.Usage(args)
-	app.Writers(out, err)
+	app.Writers(out, errW)
 	return buf.String()
 }
 
-// authGuideTemplate is the template fragment for the auth guide section,
-// shared between CompactUsageTemplate and VerboseUsageTemplate.
-const authGuideTemplate = `{{if .Context.SelectedCommand -}}
-{{if eq .Context.SelectedCommand.Name "auth" -}}
-{{if .Context.SelectedCommand.Commands -}}
-{{T "AUTH GUIDE"|Bold}}
-  Quick start:
-    fastly auth login
-    fastly auth login --sso --token <name>
-  Token precedence:
-    --token (raw or stored name) > FASTLY_API_TOKEN > fastly.toml profile > default auth token
-  Stored tokens:
-    fastly auth list
-    fastly auth use <name>
-  Non-interactive usage:
-    fastly service list --token $TOKEN
-
-{{end -}}
-{{end -}}
-{{end -}}
-`
-
-// CompactUsageTemplate is the default usage template, rendered when users type
-// e.g. just `fastly`, or use the `-h, --help` flag.
+// CompactUsageTemplate is the default usage template.
 var CompactUsageTemplate = `{{define "FormatCommand" -}}
 {{if .FlagSummary}} {{.FlagSummary}}{{end -}}
 {{range .Args}} {{if not .Required}}[{{end}}<{{.Name}}>{{if .Value|IsCumulative}} ...{{end}}{{if not .Required}}]{{end}}{{end -}}
@@ -116,13 +88,11 @@ var CompactUsageTemplate = `{{define "FormatCommand" -}}
 {{T "COMMANDS"|Bold}}
 {{.App.Commands|CommandsToTwoColumns|FormatTwoColumns}}
 {{end -}}
-` + authGuideTemplate + `
 {{T "SEE ALSO"|Bold}}
 {{.Context.SelectedCommand|SeeAlso}}
 `
 
-// UsageTemplateFuncs is a map of template functions which get passed to the
-// usage template renderer.
+// UsageTemplateFuncs is a map of template functions for the usage template.
 var UsageTemplateFuncs = template.FuncMap{
 	"CommandsToTwoColumns": func(c []*kingpin.CmdModel) [][2]string {
 		rows := [][2]string{}
@@ -134,20 +104,18 @@ var UsageTemplateFuncs = template.FuncMap{
 		return rows
 	},
 	"GlobalFlags": func(f []*kingpin.ClauseModel) []*kingpin.ClauseModel {
-		gf := globalFlags()
 		flags := []*kingpin.ClauseModel{}
 		for _, flag := range f {
-			if gf[flag.Name] {
+			if GlobalFlags[flag.Name] {
 				flags = append(flags, flag)
 			}
 		}
 		return flags
 	},
 	"OptionalFlags": func(f []*kingpin.ClauseModel) []*kingpin.ClauseModel {
-		gf := globalFlags()
 		optionalFlags := []*kingpin.ClauseModel{}
 		for _, flag := range f {
-			if !flag.Required && !flag.Hidden && !gf[flag.Name] {
+			if !flag.Required && !flag.Hidden && !GlobalFlags[flag.Name] {
 				optionalFlags = append(optionalFlags, flag)
 			}
 		}
@@ -167,30 +135,26 @@ var UsageTemplateFuncs = template.FuncMap{
 	},
 }
 
-// IMPORTANT: Kingpin doesn't support global flags.
-// We hack a solution in ./run.go (`configureKingpin` function).
+// GlobalFlags is the set of flag names considered global.
 //
-// NOTE: This map is used to help populate the CLI 'usage' template renderer.
-func globalFlags() map[string]bool {
-	m := map[string]bool{
-		"accept-defaults": true,
-		"account":         true,
-		"auto-yes":        true,
-		"debug-mode":      true,
-		"endpoint":        true,
-		"help":            true,
-		"non-interactive": true,
-		"quiet":           true,
-		"verbose":         true,
-	}
-	if !env.AuthCommandDisabled() {
-		m["token"] = true
-	}
-	return m
+// IMPORTANT: Kingpin doesn't support global flags.
+// We hack a solution in the ConfigureKingpin function.
+var GlobalFlags = map[string]bool{
+	"accept-defaults": true,
+	"account":         true,
+	"auto-yes":        true,
+	"debug-mode":      true,
+	"enable-sso":      true,
+	"endpoint":        true,
+	"help":            true,
+	"non-interactive": true,
+	"profile":         true,
+	"quiet":           true,
+	"token":           true,
+	"verbose":         true,
 }
 
-// VerboseUsageTemplate is the full-fat usage template, rendered when users type
-// the long-form e.g. `fastly help service`.
+// VerboseUsageTemplate is the full-fat usage template.
 const VerboseUsageTemplate = `{{define "FormatCommands" -}}
 {{range .FlattenedCommands -}}
 {{ if not .Hidden }}
@@ -232,29 +196,19 @@ const VerboseUsageTemplate = `{{define "FormatCommands" -}}
 {{T "COMMANDS"|Bold -}}
   {{template "FormatCommands" .App}}
 {{end -}}
-` + authGuideTemplate + `
 {{T "SEE ALSO"|Bold}}
 {{.Context.SelectedCommand|SeeAlso}}
 `
 
-// processCommandInput groups together all the logic related to parsing and
-// processing the incoming command request from the user, as well as handling
-// the various places where help output can be displayed.
-func processCommandInput(
+// ProcessCommandInput groups together all the logic related to parsing and
+// processing the incoming command request from the user.
+func ProcessCommandInput(
 	data *global.Data,
 	app *kingpin.Application,
 	commands []argparser.Command,
-	extLookup ...*framework.ExternalCommandLookup,
+	extLookup *ExternalCommandLookup,
+	defaultCommand *string,
 ) (command argparser.Command, cmdName string, err error) {
-	var ext *framework.ExternalCommandLookup
-	if len(extLookup) > 0 {
-		ext = extLookup[0]
-	}
-	// As the `help` command model gets privately added as a side-effect of
-	// kingpin.Parse, we cannot add the `--format json` flag to the model.
-	// Therefore, we have to manually parse the args slice here to check for the
-	// existence of `help --format json`, if present we print usage JSON and
-	// exit early.
 	if argparser.ArgsIsHelpJSON(data.Args) {
 		j, err := UsageJSON(app)
 		if err != nil {
@@ -265,26 +219,10 @@ func processCommandInput(
 		return command, strings.Join(data.Args, ""), nil
 	}
 
-	// Use partial application to generate help output function.
 	help := displayHelp(data.ErrLog, data.Args, app, data.Output, io.Discard)
 
-	// Handle parse errors and display contextual usage if possible. Due to bugs
-	// and an obsession for lots of output side-effects in the kingpin.Parse
-	// logic, we suppress it from writing any usage or errors to the writer by
-	// swapping the writer with a no-op and then restoring the real writer
-	// afterwards. This ensures usage text is only written once to the writer
-	// and gives us greater control over our error formatting.
 	app.Writers(io.Discard, io.Discard)
 
-	// The `vars` variable is passed into our CLI's Usage() function and exposes
-	// variables to the template used to generate help output.
-	//
-	// NOTE: The zero value of a map is nil.
-	// A nil map has no keys, nor can keys be added until initialised.
-	//
-	// TODO: In the future expose some variables for the template to utilise.
-	// We don't initialise the map currently as there are no variables to expose.
-	// But it's useful to have it implemented so it's ready to roll when we do.
 	var vars map[string]any
 
 	if argparser.IsVerboseAndQuiet(data.Args) {
@@ -301,39 +239,31 @@ func processCommandInput(
 		}
 	}
 
-	// NOTE: We call two similar methods below: ParseContext() and Parse().
-	//
-	// We call Parse() because we want the high-level side effect of processing
-	// the command information, but we call ParseContext() because we require a
-	// context object separately to identify if the --help flag was passed (this
-	// isn't possible to do with the Parse() method).
-	//
-	// Internally Parse() calls ParseContext(), to help it handle specific
-	// behaviours such as configuring pre and post conditional behaviours, as well
-	// as other related settings.
-	//
-	// Normally this would mean Parse() could fail because ParseContext() failed,
-	// which happens if the given command or one of its sub commands are
-	// unrecognised or if an unrecognised flag is provided, while Parse() can also
-	// fail if a 'required' flag is missing. But in reality, because we call
-	// ParseContext() first, it means the Parse() function should only really
-	// error on things not already caught by ParseContext().
-	//
-	// ctx.SelectedCommand will be nil if only a flag like --verbose or -v is
-	// provided but with no actual command set so we check with IsGlobalFlagsOnly.
 	noargs := len(data.Args) == 0
 	globalFlagsOnly := argparser.IsGlobalFlagsOnly(data.Args)
 	ctx, err := app.ParseContext(data.Args)
 	if err != nil && !argparser.IsCompletion(data.Args) || noargs || globalFlagsOnly {
-		if noargs || globalFlagsOnly {
-			err = fmt.Errorf("command not specified")
-		} else if ext != nil {
-			// Unknown command: try external binary dispatch before showing help.
-			if handled, extErr := framework.RunExternal(data, ext); handled {
-				return command, "external", extErr
+		if (noargs || globalFlagsOnly) && defaultCommand != nil {
+			data.Args = append([]string{*defaultCommand}, data.Args...)
+			ctx, err = app.ParseContext(data.Args)
+			if err != nil {
+				return command, cmdName, help(vars, err)
 			}
+			noargs = false
+			globalFlagsOnly = false
+			// Fall through to normal command selection below.
+		} else {
+			if noargs || globalFlagsOnly {
+				err = fmt.Errorf("command not specified")
+			}
+			// Try external command dispatch before showing help.
+			if extLookup != nil && !noargs && !globalFlagsOnly {
+				if binPath, remaining, found := extLookup.Lookup(data.Args); found {
+					return &externalCommand{binPath: binPath, args: remaining, cmdName: extractCommandName(data.Args), data: data}, "external", nil
+				}
+			}
+			return command, cmdName, help(vars, err)
 		}
-		return command, cmdName, help(vars, err)
 	}
 
 	if len(data.Args) == 1 && data.Args[0] == "--" {
@@ -343,14 +273,6 @@ func processCommandInput(
 		}
 	}
 
-	// NOTE: `fastly help`, no flags, or only globals, should skip conditional.
-	//
-	// This is because the `ctx` variable will be assigned a
-	// `kingpin.ParseContext` whose `SelectedCommand` will be nil.
-	//
-	// Additionally we don't want to use the ctx if dealing with a shell
-	// completion flag, as that depends on kingpin.Parse() being called, and so
-	// the `ctx` is otherwise empty.
 	var found bool
 	if !noargs && !globalFlagsOnly && !argparser.IsHelpOnly(data.Args) && !argparser.IsHelpFlagOnly(data.Args) && !argparser.IsCompletion(data.Args) && !argparser.IsCompletionScript(data.Args) {
 		command, found = argparser.Select(ctx.SelectedCommand.FullCommand(), commands)
@@ -366,49 +288,28 @@ func processCommandInput(
 		}
 	}
 
-	// NOTE: app.Parse() resets the default values for app.Writers() from
-	// io.Discard to os.Stdout and os.Stderr, meaning when using a shell
-	// autocomplete flag we'll not only see the expected output but also a help
-	// message because the parser has no matching command and so it thinks there
-	// is an error and prints the help output for us.
-	//
-	// The only way I've found to prevent this is by ensuring the arguments
-	// provided have a valid command along with the flag, for example:
-	//
-	// fastly --completion-script-bash acl
-	//
-	// But rather than rely on a feature command, we have defined a hidden
-	// command that we can safely append to the arguments and not have to worry
-	// about it getting removed accidentally in the future as we now have a test
-	// to validate the shell autocomplete behaviours.
-	//
-	// Lastly, we don't want to append our hidden shellcomplete command if the
-	// caller passes --completion-bash because adding a command to the arguments
-	// list in that scenario would cause Kingpin logic to fail (as it expects the
-	// flag to be used on its own).
 	if argparser.IsCompletionScript(data.Args) {
 		data.Args = append(data.Args, "shellcomplete")
 	}
 
 	cmdName, err = app.Parse(data.Args)
 	if err != nil {
+		// Try external command dispatch before showing help.
+		if extLookup != nil {
+			if binPath, remaining, found := extLookup.Lookup(data.Args); found {
+				return &externalCommand{binPath: binPath, args: remaining, cmdName: extractCommandName(data.Args), data: data}, "external", nil
+			}
+		}
 		return command, "", help(vars, err)
 	}
 
-	// Restore output writers
 	app.Writers(data.Output, io.Discard)
 
-	// Kingpin generates shell completion as a side-effect of kingpin.Parse() so
-	// we allow it to call os.Exit, only if a completion flag is present.
 	if argparser.IsCompletion(data.Args) || argparser.IsCompletionScript(data.Args) {
 		app.Terminate(os.Exit)
 		return command, "shell-autocomplete", nil
 	}
 
-	// A side-effect of suppressing app.Parse from writing output is the usage
-	// isn't printed for the default `help` command. Therefore we capture it
-	// here by calling Parse, again swapping the Writers. This also ensures the
-	// larger and more verbose help formatting is used.
 	if cmdName == "help" {
 		return command, cmdName, fsterr.SkipExitError{
 			Skip: true,
@@ -418,8 +319,6 @@ func processCommandInput(
 		}
 	}
 
-	// Catch scenario where user wants to view help with the following format:
-	// fastly --help <command>
 	if argparser.IsHelpFlagOnly(data.Args) {
 		return command, cmdName, fsterr.SkipExitError{
 			Skip: true,
@@ -436,32 +335,23 @@ func useFullHelpOutput(app *kingpin.Application, args []string, out io.Writer) *
 	_, _ = app.Parse(args)
 	app.Writers(out, io.Discard)
 
-	// The full-fat output of `fastly help` should have a hint at the bottom
-	// for more specific help. Unfortunately I don't know of a better way to
-	// distinguish `fastly help` from e.g. `fastly help pops` than this check.
 	if len(args) > 0 && args[len(args)-1] == "help" {
 		fmt.Fprintln(&buf, "\nFor help on a specific command, try e.g.")
 		fmt.Fprintln(&buf, "")
-		fmt.Fprintln(&buf, "\tfastly help compute")
-		fmt.Fprintln(&buf, "\tfastly compute --help")
+		fmt.Fprintln(&buf, "\tfastly help profile")
+		fmt.Fprintln(&buf, "\tfastly profile --help")
 		fmt.Fprintln(&buf, "")
 	}
 	return &buf
 }
 
-// metadata is combined into the usage output so the Developer Hub can display
-// additional information about how to use the commands and what APIs they call.
-// e.g. https://www.fastly.com/documentation/reference/cli/vcl/snippet/create/
-//
 //go:embed metadata.json
 var metadata []byte
 
-// commandsMetadata represents the metadata.json content that will provide extra
-// contextual information.
 type commandsMetadata map[string]any
 
 // UsageJSON returns a structured representation of the application usage
-// documentation in JSON format. This is useful for machine consumption.
+// documentation in JSON format.
 func UsageJSON(app *kingpin.Application) (string, error) {
 	var data commandsMetadata
 	err := json.Unmarshal(metadata, &data)
@@ -513,13 +403,13 @@ type commandJSON struct {
 }
 
 func getGlobalFlagJSON(models []*kingpin.ClauseModel) []flagJSON {
-	var globalFlags []*kingpin.ClauseModel
+	var gf []*kingpin.ClauseModel
 	for _, f := range models {
 		if !f.Hidden {
-			globalFlags = append(globalFlags, f)
+			gf = append(gf, f)
 		}
 	}
-	return getFlagJSON(globalFlags)
+	return getFlagJSON(gf)
 }
 
 func getCommandJSON(models []*kingpin.CmdModel, data commandsMetadata) []commandJSON {
@@ -575,15 +465,6 @@ func getCommandJSON(models []*kingpin.CmdModel, data commandsMetadata) []command
 	return cmds
 }
 
-// recurse simplifies the tree style traversal of a complex map.
-//
-// NOTE: The `n` arg represents the number of CLI arguments. For example,
-// with `logging kafka create`, the initial function call would be passed n=3.
-// The `segs` arg represents the CLI arguments. While `data` is the map data
-// structure populated from the metadata.json file.
-//
-// Each recursive call not only decrements the `n` counter but also removes the
-// previous CLI arg, so `segs` becomes shorter on each iteration.
 func recurse(n int, segs []string, data commandsMetadata) commandsMetadata {
 	if n == 0 {
 		return data
@@ -598,7 +479,6 @@ func recurse(n int, segs []string, data commandsMetadata) commandsMetadata {
 	return nil
 }
 
-// resolveToString extracts a value from a map as a string.
 func resolveToString(i any, key string) string {
 	m, ok := i.(map[string]any)
 	if ok {
@@ -631,11 +511,6 @@ func getFlagJSON(models []*kingpin.ClauseModel) []flagJSON {
 	return flags
 }
 
-// displayHelp returns a function that prints the help output for a command or
-// command set.
-//
-// NOTE: This function is called multiple times within app.Run() and so we use
-// a closure to prevent having to pass the same unchanging arguments each time.
 func displayHelp(
 	errLog fsterr.LogInterface,
 	args []string,
@@ -651,4 +526,16 @@ func displayHelp(
 		}
 		return remediation
 	}
+}
+
+// extractCommandName extracts the first non-flag argument as the command name.
+func extractCommandName(args []string) string {
+	var parts []string
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
 }

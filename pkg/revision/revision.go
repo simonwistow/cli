@@ -57,6 +57,13 @@ func init() {
 	}
 }
 
+// IsPreRelease determines if the given app version is a pre-release.
+//
+// NOTE: this is indicated by the presence of a hyphen, e.g. `v1.0.0-rc.1`.
+func IsPreRelease(version string) bool {
+	return strings.Contains(version, "-")
+}
+
 // SemVer accepts the application revision version, which is prefixed with a
 // `v` and also has a commit hash following the semantic version, and returns
 // just the semantic version.

@@ -194,6 +194,7 @@ func Define( // nolint:revive // function-length
 	if !disableAuthCmd {
 		ssoCmdRoot := sso.NewRootCommand(app, data)
 		ssoCommands = []argparser.Command{ssoCmdRoot}
+		data.SSOAuth = &sso.Authenticator{Cmd: ssoCmdRoot}
 
 		authCmdRoot := authcmd.NewRootCommand(app, data)
 		authLogin := authcmd.NewLoginCommand(authCmdRoot.CmdClause, data)
