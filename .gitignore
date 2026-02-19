@@ -1,7 +1,9 @@
-# Fastly binary
+# Fastly binaries
 **/fastly
-# But allow fastly main package
+**/fastly-info
+# But allow fastly main package and example plugin command
 !cmd/fastly
+!examples/fastly-info
 
 RELEASE_CHANGELOG.md
 

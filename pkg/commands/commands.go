@@ -179,6 +179,7 @@ func Define( // nolint:revive // function-length
 	// placement of the `sso` subcommand not look too odd we place it at the
 	// beginning of the list of commands.
 	ssoCmdRoot := sso.NewRootCommand(app, data)
+	data.SSOAuth = &sso.Authenticator{Cmd: ssoCmdRoot}
 
 	authtokenCmdRoot := authtoken.NewRootCommand(app, data)
 	authtokenCreate := authtoken.NewCreateCommand(authtokenCmdRoot.CmdClause, data)

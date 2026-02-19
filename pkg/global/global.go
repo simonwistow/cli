@@ -13,6 +13,13 @@ import (
 	"github.com/fastly/cli/pkg/manifest"
 )
 
+// SSOAuthenticator defines the interface for SSO authentication operations.
+// This allows the authentication logic to be decoupled from the command list.
+type SSOAuthenticator interface {
+	Authenticate(in io.Reader, out io.Writer) error
+	SetForceReAuth(force bool)
+}
+
 // DefaultAPIEndpoint is the default Fastly API endpoint.
 const DefaultAPIEndpoint = "https://api.fastly.com"
 
@@ -84,6 +91,8 @@ type Data struct {
 	// interactive prompt can be skipped. This is for scenarios where the command
 	// is executed directly by the user.
 	SkipAuthPrompt bool
+	// SSOAuth provides SSO authentication without requiring direct command access.
+	SSOAuth SSOAuthenticator
 	// Versioners contains multiple software versioning checkers.
 	// e.g. Check for latest CLI or Viceroy version.
 	Versioners Versioners

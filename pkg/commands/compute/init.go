@@ -57,6 +57,12 @@ type InitCommand struct {
 	tag      string
 }
 
+// RequiresToken implements framework.TokenChecker for the init command.
+// It returns true only when --from is a Fastly service ID.
+func (c *InitCommand) RequiresToken() bool {
+	return text.IsFastlyID(c.CloneFrom)
+}
+
 // Languages is a list of supported language options.
 var Languages = []string{"rust", "javascript", "go", "other"}
 
