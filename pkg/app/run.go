@@ -16,7 +16,7 @@ import (
 	"github.com/hashicorp/cap/oidc"
 	"github.com/skratchdot/open-golang/open"
 
-	"github.com/fastly/go-fastly/v15/fastly"
+	"github.com/fastly/go-fastly/v16/fastly"
 
 	"github.com/fastly/kingpin"
 
@@ -293,7 +293,7 @@ func Exec(data *global.Data) error {
 			data.AuthServer = authServer
 		}
 
-		if !data.Flags.Quiet && data.Flags.Token == "" && data.Env.APIToken == "" && data.Manifest != nil && data.Manifest.File.Profile != "" {
+		if !data.Flags.Quiet && data.Flags.Token == "" && data.Flags.Profile == "" && data.Env.APIToken == "" && data.Manifest != nil && data.Manifest.File.Profile != "" {
 			if data.Config.GetAuthToken(data.Manifest.File.Profile) == nil {
 				if defaultName, _ := data.Config.GetDefaultAuthToken(); defaultName != "" {
 					text.Warning(data.ErrOutput, "fastly.toml profile %q not found in auth config, using default token %q.\n", data.Manifest.File.Profile, defaultName)
@@ -401,6 +401,10 @@ func configureKingpin(data *global.Data) *kingpin.Application {
 // Tokens from --token (raw, unavailable when FASTLY_DISABLE_AUTH_COMMAND is
 // set) or FASTLY_API_TOKEN are assumed to be valid.
 func processToken(data *global.Data) (token string, tokenSource lookup.Source, err error) {
+	if err := data.ValidateProfileFlag(); err != nil {
+		return "", lookup.SourceUndefined, err
+	}
+
 	token, tokenSource = data.Token()
 
 	switch tokenSource {
@@ -753,7 +757,7 @@ func commandRequiresToken(command argparser.Command) bool {
 			return text.IsFastlyID(initCmd.CloneFrom)
 		}
 		return false
-	case "compute build", "compute hash-files", "compute metadata", "compute pack", "compute serve", "compute validate":
+	case "compute build", "compute hash-files", "compute install-tools", "compute metadata", "compute pack", "compute serve", "compute validate":
 		return false
 	}
 	commandName = strings.Split(commandName, " ")[0]

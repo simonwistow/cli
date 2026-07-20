@@ -19,7 +19,7 @@ import (
 
 	cp "github.com/otiai10/copy"
 
-	"github.com/fastly/go-fastly/v15/fastly"
+	"github.com/fastly/go-fastly/v16/fastly"
 
 	"github.com/fastly/cli/pkg/argparser"
 	"github.com/fastly/cli/pkg/config"
@@ -63,7 +63,7 @@ func (c *InitCommand) RequiresToken() bool {
 }
 
 // Languages is a list of supported language options.
-var Languages = []string{"rust", "javascript", "go", "other"}
+var Languages = []string{"rust", "javascript", "go", "cpp", "other"}
 
 // NewInitCommand returns a usable command registered under the parent.
 func NewInitCommand(parent argparser.Registerer, g *global.Data) *InitCommand {

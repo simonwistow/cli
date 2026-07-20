@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fastly/go-fastly/v15/fastly"
+	"github.com/fastly/go-fastly/v16/fastly"
 
 	"github.com/fastly/cli/pkg/app"
 	"github.com/fastly/cli/pkg/config"
@@ -39,6 +39,18 @@ func TestInit(t *testing.T) {
 		{
 			Name:   "Default",
 			Path:   "https://github.com/fastly/compute-starter-kit-javascript-default",
+			Branch: "main",
+		},
+	}
+	skCPP := []config.StarterKit{
+		{
+			Name:   "Default",
+			Path:   "https://github.com/fastly/compute-starter-kit-cpp-default",
+			Branch: "main",
+		},
+		{
+			Name:   "Empty",
+			Path:   "https://github.com/fastly/compute-starter-kit-cpp-empty",
 			Branch: "main",
 		},
 	}
@@ -405,6 +417,30 @@ func TestInit(t *testing.T) {
 				},
 			},
 			manifestIncludes: `name = "fastly-temp`,
+		},
+		{
+			name: "with C++ language",
+			args: args("compute init --language cpp"),
+			configFile: config.File{
+				StarterKits: config.StarterKitLanguages{
+					CPP: skCPP,
+				},
+			},
+			manifestIncludes: `name = "fastly-temp`,
+		},
+		{
+			name: "with --from set to C++ empty starter kit",
+			args: args("compute init --from https://github.com/fastly/compute-starter-kit-cpp-empty"),
+			configFile: config.File{
+				StarterKits: config.StarterKitLanguages{
+					CPP: skCPP,
+				},
+			},
+			wantOutput: []string{
+				"Fetching package template",
+				"Reading fastly.toml",
+				"SUCCESS: Initialized package",
+			},
 		},
 		// NOTE: This test verifies that we don't fetch a remote project.
 		// Whether that be a starter kit or custom project template.

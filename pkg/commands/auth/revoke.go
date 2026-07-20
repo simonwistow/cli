@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/fastly/go-fastly/v15/fastly"
+	"github.com/fastly/go-fastly/v16/fastly"
 
 	"github.com/fastly/cli/pkg/api"
 	"github.com/fastly/cli/pkg/argparser"
@@ -49,6 +49,10 @@ func NewRevokeCommand(parent argparser.Registerer, g *global.Data) *RevokeComman
 
 func (c *RevokeCommand) Exec(in io.Reader, out io.Writer) error {
 	if err := c.validateFlags(); err != nil {
+		return err
+	}
+
+	if err := c.Globals.ValidateProfileFlag(); err != nil {
 		return err
 	}
 

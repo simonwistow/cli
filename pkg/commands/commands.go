@@ -64,6 +64,9 @@ import (
 	"github.com/fastly/cli/pkg/commands/configstoreentry"
 	"github.com/fastly/cli/pkg/commands/dashboard"
 	dashboardItem "github.com/fastly/cli/pkg/commands/dashboard/item"
+	"github.com/fastly/cli/pkg/commands/dns"
+	dnstsigkey "github.com/fastly/cli/pkg/commands/dns/tsigkey"
+	dnszone "github.com/fastly/cli/pkg/commands/dns/zone"
 	"github.com/fastly/cli/pkg/commands/domain"
 	"github.com/fastly/cli/pkg/commands/install"
 	"github.com/fastly/cli/pkg/commands/ip"
@@ -77,6 +80,7 @@ import (
 	"github.com/fastly/cli/pkg/commands/ngwaf/rule"
 	"github.com/fastly/cli/pkg/commands/ngwaf/signallist"
 	"github.com/fastly/cli/pkg/commands/ngwaf/stringlist"
+	"github.com/fastly/cli/pkg/commands/ngwaf/timeseries"
 	"github.com/fastly/cli/pkg/commands/ngwaf/wildcardlist"
 	"github.com/fastly/cli/pkg/commands/ngwaf/workspace"
 	"github.com/fastly/cli/pkg/commands/ngwaf/workspace/alert"
@@ -96,6 +100,7 @@ import (
 	wssignallistlist "github.com/fastly/cli/pkg/commands/ngwaf/workspace/signallist"
 	wsstringlistlist "github.com/fastly/cli/pkg/commands/ngwaf/workspace/stringlist"
 	"github.com/fastly/cli/pkg/commands/ngwaf/workspace/threshold"
+	wstimeseries "github.com/fastly/cli/pkg/commands/ngwaf/workspace/timeseries"
 	"github.com/fastly/cli/pkg/commands/ngwaf/workspace/virtualpatch"
 	wswildcardlistlist "github.com/fastly/cli/pkg/commands/ngwaf/workspace/wildcardlist"
 	"github.com/fastly/cli/pkg/commands/objectstorage"
@@ -252,6 +257,7 @@ func Define( // nolint:revive // function-length
 	computeDeploy := compute.NewDeployCommand(computeCmdRoot.CmdClause, data)
 	computeHashFiles := compute.NewHashFilesCommand(computeCmdRoot.CmdClause, data, computeBuild)
 	computeInit := compute.NewInitCommand(computeCmdRoot.CmdClause, data)
+	computeInstallTools := compute.NewInstallCommand(computeCmdRoot.CmdClause, data)
 	computeMetadata := compute.NewMetadataCommand(computeCmdRoot.CmdClause, data)
 	computePack := compute.NewPackCommand(computeCmdRoot.CmdClause, data)
 	computePublish := compute.NewPublishCommand(computeCmdRoot.CmdClause, data, computeBuild, computeDeploy)
@@ -283,6 +289,19 @@ func Define( // nolint:revive // function-length
 	dashboardItemDescribe := dashboardItem.NewDescribeCommand(dashboardItemCmdRoot.CmdClause, data)
 	dashboardItemUpdate := dashboardItem.NewUpdateCommand(dashboardItemCmdRoot.CmdClause, data)
 	dashboardItemDelete := dashboardItem.NewDeleteCommand(dashboardItemCmdRoot.CmdClause, data)
+	dnsCmdRoot := dns.NewRootCommand(app, data)
+	dnsTSIGKeyCmdRoot := dnstsigkey.NewRootCommand(dnsCmdRoot.CmdClause, data)
+	dnsTSIGKeyCreate := dnstsigkey.NewCreateCommand(dnsTSIGKeyCmdRoot.CmdClause, data)
+	dnsTSIGKeyDelete := dnstsigkey.NewDeleteCommand(dnsTSIGKeyCmdRoot.CmdClause, data)
+	dnsTSIGKeyDescribe := dnstsigkey.NewDescribeCommand(dnsTSIGKeyCmdRoot.CmdClause, data)
+	dnsTSIGKeyList := dnstsigkey.NewListCommand(dnsTSIGKeyCmdRoot.CmdClause, data)
+	dnsTSIGKeyUpdate := dnstsigkey.NewUpdateCommand(dnsTSIGKeyCmdRoot.CmdClause, data)
+	dnsZoneCmdRoot := dnszone.NewRootCommand(dnsCmdRoot.CmdClause, data)
+	dnsZoneCreate := dnszone.NewCreateCommand(dnsZoneCmdRoot.CmdClause, data)
+	dnsZoneDelete := dnszone.NewDeleteCommand(dnsZoneCmdRoot.CmdClause, data)
+	dnsZoneDescribe := dnszone.NewDescribeCommand(dnsZoneCmdRoot.CmdClause, data)
+	dnsZoneList := dnszone.NewListCommand(dnsZoneCmdRoot.CmdClause, data)
+	dnsZoneUpdate := dnszone.NewUpdateCommand(dnsZoneCmdRoot.CmdClause, data)
 	domainCmdRoot := domain.NewRootCommand(app, data)
 	domainCreate := domain.NewCreateCommand(domainCmdRoot.CmdClause, data)
 	domainDelete := domain.NewDeleteCommand(domainCmdRoot.CmdClause, data)
@@ -352,6 +371,8 @@ func Define( // nolint:revive // function-length
 	ngwafStringListGet := stringlist.NewGetCommand(ngwafStringListRoot.CmdClause, data)
 	ngwafStringListList := stringlist.NewListCommand(ngwafStringListRoot.CmdClause, data)
 	ngwafStringListUpdate := stringlist.NewUpdateCommand(ngwafStringListRoot.CmdClause, data)
+	ngwafTimeseriesRoot := timeseries.NewRootCommand(ngwafRoot.CmdClause, data)
+	ngwafTimeseriesList := timeseries.NewListCommand(ngwafTimeseriesRoot.CmdClause, data)
 	ngwafWildcardListRoot := wildcardlist.NewRootCommand(ngwafRoot.CmdClause, data)
 	ngwafWildcardListCreate := wildcardlist.NewCreateCommand(ngwafWildcardListRoot.CmdClause, data)
 	ngwafWildcardListDelete := wildcardlist.NewDeleteCommand(ngwafWildcardListRoot.CmdClause, data)
@@ -364,6 +385,8 @@ func Define( // nolint:revive // function-length
 	ngwafWorkspaceCountryListGet := wscountrylist.NewGetCommand(ngwafWorkspaceCountryListRoot.CmdClause, data)
 	ngwafWorkspaceCountryListList := wscountrylist.NewListCommand(ngwafWorkspaceCountryListRoot.CmdClause, data)
 	ngwafWorkspaceCountryListUpdate := wscountrylist.NewUpdateCommand(ngwafWorkspaceCountryListRoot.CmdClause, data)
+	ngwafWorkspaceTimeseriesRoot := wstimeseries.NewRootCommand(ngwafWorkspaceRoot.CmdClause, data)
+	ngwafWorkspaceTimeseriesGet := wstimeseries.NewGetCommand(ngwafWorkspaceTimeseriesRoot.CmdClause, data)
 	ngwafWorkspaceCustomSignalRoot := wscustomsignal.NewRootCommand(ngwafWorkspaceRoot.CmdClause, data)
 	ngwafWorkspaceCustomSignalCreate := wscustomsignal.NewCreateCommand(ngwafWorkspaceCustomSignalRoot.CmdClause, data)
 	ngwafWorkspaceCustomSignalDelete := wscustomsignal.NewDeleteCommand(ngwafWorkspaceCustomSignalRoot.CmdClause, data)
@@ -1126,6 +1149,7 @@ func Define( // nolint:revive // function-length
 		computeDeploy,
 		computeHashFiles,
 		computeInit,
+		computeInstallTools,
 		computeMetadata,
 		computePack,
 		computePublish,
@@ -1157,6 +1181,19 @@ func Define( // nolint:revive // function-length
 		dashboardItemDescribe,
 		dashboardItemUpdate,
 		dashboardItemDelete,
+		dnsCmdRoot,
+		dnsTSIGKeyCmdRoot,
+		dnsTSIGKeyCreate,
+		dnsTSIGKeyDelete,
+		dnsTSIGKeyDescribe,
+		dnsTSIGKeyList,
+		dnsTSIGKeyUpdate,
+		dnsZoneCmdRoot,
+		dnsZoneCreate,
+		dnsZoneDelete,
+		dnsZoneDescribe,
+		dnsZoneList,
+		dnsZoneUpdate,
 		domainCmdRoot,
 		domainCreate,
 		domainDelete,
@@ -1382,6 +1419,8 @@ func Define( // nolint:revive // function-length
 		ngwafStringListGet,
 		ngwafStringListList,
 		ngwafStringListUpdate,
+		ngwafTimeseriesRoot,
+		ngwafTimeseriesList,
 		ngwafWildcardListCreate,
 		ngwafWildcardListDelete,
 		ngwafWildcardListGet,
@@ -1393,6 +1432,8 @@ func Define( // nolint:revive // function-length
 		ngwafWorkspaceCountryListGet,
 		ngwafWorkspaceCountryListList,
 		ngwafWorkspaceCountryListUpdate,
+		ngwafWorkspaceTimeseriesRoot,
+		ngwafWorkspaceTimeseriesGet,
 		ngwafWorkspaceCustomSignalRoot,
 		ngwafWorkspaceCustomSignalCreate,
 		ngwafWorkspaceCustomSignalDelete,
